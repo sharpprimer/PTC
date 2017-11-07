@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="GB2312" ?>
+<root>
+	<broker BrokerID="66666" BrokerName="申万期货股指仿真">
+		<Servers>
+			<Server>
+				<Name>互联网</Name>
+				<Trading>
+					<item>222.66.235.70:21205</item>
+					<item>222.66.235.70:21206</item>
+				</Trading>
+				<MarketData>
+					<item>222.66.235.70:21213</item>
+					<item>222.66.235.70:21214</item>
+				</MarketData>
+			</Server>
+		</Servers>
+	</broker>
+</root>
