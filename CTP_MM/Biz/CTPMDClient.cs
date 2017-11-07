@@ -41,8 +41,6 @@ namespace CTP_STrader.Biz
                 if (mdApi == null)
                 {
                     mdApi = new FtdcMdAdapter(".\\md", false,false);                   // 创建md目录存放流文件，避免与交易流文件冲突
-                    mdApi.OnFrontConnected += new FrontConnected(OnFrontConnected);
-                    mdApi.OnFrontDisconnected += new FrontDisconnected(OnFrontDisconnected);
                     mdApi.OnRspUserLogout += new RspUserLogout(OnRspUserLogout);
                     mdApi.OnRspUserLogin += new RspUserLogin(OnRspUserLogin);
                     mdApi.OnRspSubMarketData += new RspSubMarketData(OnRspSubMarketData);
