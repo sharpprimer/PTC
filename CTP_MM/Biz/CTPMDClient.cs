@@ -41,17 +41,9 @@ namespace CTP_STrader.Biz
                 if (mdApi == null)
                 {
                     mdApi = new FtdcMdAdapter(".\\md", false,false);                   // 创建md目录存放流文件，避免与交易流文件冲突
-                    mdApi.OnRspUserLogout += new RspUserLogout(OnRspUserLogout);
-                    mdApi.OnRspUserLogin += new RspUserLogin(OnRspUserLogin);
-                    mdApi.OnRspSubMarketData += new RspSubMarketData(OnRspSubMarketData);
-                    mdApi.OnRspUnSubMarketData += new RspUnSubMarketData(OnRspUnSubMarketData);
-                    mdApi.OnRtnDepthMarketData += new RtnDepthMarketData(OnRtnDepthMarketData);
-                    mdApi.OnRspError += new RspError(OnRspError);
-
                     mdApi.OnFrontEvent += MdApi_OnFrontEvent;
                     mdApi.OnRspEvent += MdApi_OnRspEvent;
                     mdApi.OnRtnEvent += MdApi_OnRtnEvent;
-
                 }
 
                 foreach (var addr in FrontAddrs)
@@ -93,8 +85,10 @@ namespace CTP_STrader.Biz
                     break;
 
                 default:
-                    __DEBUGPF__();
-                    HandleStatusInternal("CTP前置机断开连接：nReason = " + e.Reason);
+                    {
+                        __DEBUGPF__();
+                        HandleStatusInternal("CTP前置机断开连接：nReason = " + e.Reason);
+                    }
                     break;
             }
         }
@@ -145,24 +139,53 @@ namespace CTP_STrader.Biz
         private void MdApi_OnRspEvent(object sender, OnRspEventArgs e)
         {
             Console.WriteLine("MdApi_OnRspEvent " + e.EventType.ToString());
-            bool err = IsError(e.RspInfo, e.EventType.ToString());
+            if (!IsError(e.RspInfo))
+            {
+                HandleStatusInternal("CPT返回错误:ErrorID=" + e.RspInfo.ErrorID + ",ErrorMsg=" + e.RspInfo.ErrorMsg + ", 来源 " + e.EventType.ToString());
+                return;
+            }
 
             switch (e.EventType)
             {
                 case EnumOnRspType.OnRspUserLogin:
-                    if (!err)
-                        Console.WriteLine("登录成功");
-                    break;
-                case EnumOnRspType.OnRspSubMarketData:
                     {
-                        var f = Conv.P2S<ThostFtdcSpecificInstrumentField>(e.Param);
-                        Console.WriteLine("订阅成功:" + f.InstrumentID);
+                        __DEBUGPF__();
+                        if (e.IsLast)
+                        {   // 订阅
+                            Subscribe();
+
+                            if (HandleLoginDel != null)
+                            {  // 通知登录结果
+                                HandleLoginDel(true);
+                            }
+                        }
                     }
                     break;
+
+                case EnumOnRspType.OnRspUserLogout:
+                    {
+                        __DEBUGPF__();
+                        HandleStatusInternal("用户登出");
+                    }
+                    break;
+
+                case EnumOnRspType.OnRspSubMarketData:
+                    {
+                        __DEBUGPF__();
+                        if (e.IsLast)
+                        {
+                            HandleStatusInternal("CTP行情订阅成功");
+                        }
+                    }
+                    break;
+
                 case EnumOnRspType.OnRspUnSubMarketData:
                     {
-                        var f = Conv.P2S<ThostFtdcSpecificInstrumentField>(e.Param);
-                        Console.WriteLine("退订成功:" + f.InstrumentID);
+                        __DEBUGPF__();
+                        if (e.IsLast)
+                        {
+                            HandleStatusInternal("CTP行情取消订阅成功");
+                        }
                     }
                     break;
             }
@@ -175,65 +198,21 @@ namespace CTP_STrader.Biz
             var fld = Conv.P2S<ThostFtdcDepthMarketDataField>(e.Param);
 
             Console.WriteLine("{0}.{1:D3} {2} {3}", fld.UpdateTime, fld.UpdateMillisec, fld.InstrumentID, fld.LastPrice);
-        }
 
-        private void OnRspUserLogin(ThostFtdcRspUserLoginField pRspUserLogin, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
-        {
-            __DEBUGPF__();
-            if (bIsLast)
+            switch(e.EventType)
             {
-                bool isLogin = !IsErrorRspInfo(pRspInfo);
-                if (isLogin)
-                {   // 订阅
-                    Subscribe();
-                }
+                case EnumOnRtnType.OnRtnDepthMarketData:
+                    break;
 
-                // 通知登录结果
-                if (HandleLoginDel != null)
-                {
-                    HandleLoginDel(isLogin);
-                }
+                default:
+                    HandleStatusInternal("CPT行情Md未知事件返回MdApi_OnRtnEvent:"  + e.EventType.ToString());
+                    break;
             }
         }
 
-        private void OnRspUserLogout(ThostFtdcUserLogoutField pUserLogout, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
+        private bool IsError(ThostFtdcRspInfoField rspinfo)
         {
-            __DEBUGPF__();
-            IsErrorRspInfo(pRspInfo);
-        }
-
-        private void OnRspSubMarketData(ThostFtdcSpecificInstrumentField pSpecificInstrument, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
-        {
-            __DEBUGPF__();
-            if (bIsLast && !IsErrorRspInfo(pRspInfo))
-            {
-                HandleStatusInternal("CTP行情订阅成功");
-            }
-        }
-
-        private void OnRspUnSubMarketData(ThostFtdcSpecificInstrumentField pSpecificInstrument, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
-        {
-            __DEBUGPF__();
-            if (bIsLast && !IsErrorRspInfo(pRspInfo))
-            {
-                HandleStatusInternal("CTP行情取消订阅成功");
-            }
-        }
-
-        private void OnRspError(ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
-        {
-            __DEBUGPF__();
-            IsErrorRspInfo(pRspInfo);
-        }
-
-        private bool IsErrorRspInfo(ThostFtdcRspInfoField pRspInfo)
-        {
-            var flag = (pRspInfo != null && pRspInfo.ErrorID != 0);
-            if (flag)
-            {
-                HandleStatusInternal("CPT返回错误:ErrorID=" + pRspInfo.ErrorID + ",ErrorMsg=" + pRspInfo.ErrorMsg);
-            }
-            return flag;
+            return (rspinfo != null && rspinfo.ErrorID != 0);
         }
 
         private void __DEBUGPF__()

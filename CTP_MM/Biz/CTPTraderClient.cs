@@ -13,7 +13,7 @@ namespace CTP_STrader.Biz
         static readonly string INSTRUMENT_ID = "IF";
 
         // 内部变量
-        CTPTraderAdapter trader;
+        FtdcTdAdapter trader;
         int FRONT_ID, SESSION_ID;
         int iRequestID = 0;
         int iOrderRef;
@@ -55,25 +55,13 @@ namespace CTP_STrader.Biz
             }
 
             if (trader == null)
-            { trader = new CTPTraderAdapter(".\\trade"); }  // 创建trade目录存放流文件，避免与行情流文件冲突
+            { trader = new FtdcTdAdapter(".\\trade"); }  // 创建trade目录存放流文件，避免与行情流文件冲突
 
             // 回调函数
-            trader.OnFrontConnected += new FrontConnected(OnFrontConnected);
-            trader.OnFrontDisconnected += new FrontDisconnected(OnFrontDisconnected);
-            trader.OnHeartBeatWarning += new HeartBeatWarning(OnHeartBeatWarning);
-            trader.OnRspError += new RspError(OnRspError);
-            trader.OnRspUserLogin += new RspUserLogin(OnRspUserLogin);
-            trader.OnRspOrderAction += new RspOrderAction(OnRspOrderAction);
-            trader.OnRspOrderInsert += new RspOrderInsert(OnRspOrderInsert);
-            trader.OnErrRtnOrderInsert += new ErrRtnOrderInsert(OnErrRtnOrderInsert);
-            trader.OnErrRtnOrderAction += new ErrRtnOrderAction(OnErrRtnOrderAction);
-            trader.OnRspQryInstrument += new RspQryInstrument(OnRspQryInstrument);
-            trader.OnRspQryInvestorPosition += new RspQryInvestorPosition(OnRspQryInvestorPosition);
-            trader.OnRspQryTradingAccount += new RspQryTradingAccount(OnRspQryTradingAccount);
-            trader.OnRspSettlementInfoConfirm += new RspSettlementInfoConfirm(OnRspSettlementInfoConfirm);
-            trader.OnRtnOrder += new RtnOrder(OnRtnOrder);
-            trader.OnRtnTrade += new RtnTrade(OnRtnTrade);
-
+            trader.OnFrontEvent += TraderApi_OnFrontEvent;
+            trader.OnRspEvent += TraderApi_OnRspEvent;
+            trader.OnErrRtnEvent += TraderApi_OnErrRtnEvent;
+            trader.OnRtnEvent += TraderApi_OnRtnEvent;
 
             // 订阅私有流
             trader.SubscribePrivateTopic(EnumTeResumeType.THOST_TERT_RESUME);
@@ -104,15 +92,138 @@ namespace CTP_STrader.Biz
 
         /*
          * --------------------------------------------------------------
+         * 通用回应事件：连接/错误回应/错误返回/正常回应
+         * --------------------------------------------------------------
+         */
+        private void TraderApi_OnFrontEvent(object sender, OnFrontEventArgs e)
+        {
+            switch (e.EventType)
+            {
+                case EnumOnFrontType.OnFrontConnected:
+                    {
+                        ReqUserLogin();
+                    }
+                    break;
+
+                default:
+                    {
+                        HandleStatusInternal("CTP前置机断开连接：nReason = " + e.Reason);
+                    }
+                    break;
+            }
+        }
+
+        private void TraderApi_OnRspEvent(object sender, OnRspEventArgs e)
+        {
+            if (!IsError(e.RspInfo, e.EventType.ToString()))
+            { return; }
+
+            switch (e.EventType)
+            {
+                case EnumOnRspType.OnRspUserLogin:
+                    if (e.Param != IntPtr.Zero)
+                    {
+                        var fld = Conv.P2S<ThostFtdcRspUserLoginField>(e.Param);
+                        OnRspUserLogin(fld, e.RspInfo, e.RequestID, e.IsLast);
+                    }
+                    else
+                    { HandleStatusInternal("参数ThostFtdcRspUserLoginField为空"); }
+                    break;
+
+                case EnumOnRspType.OnRspSettlementInfoConfirm:
+                    if (e.Param != IntPtr.Zero)
+                    {
+                        var fld = Conv.P2S<ThostFtdcSettlementInfoConfirmField>(e.Param);
+                        OnRspSettlementInfoConfirm(fld, e.RspInfo, e.RequestID, e.IsLast);
+                    }
+                    else
+                    { HandleStatusInternal("参数ThostFtdcSettlementInfoConfirmField为空"); }
+                    break;
+
+                case EnumOnRspType.OnRspQryInstrument:
+                    if (e.Param != IntPtr.Zero)
+                    {
+                        var fld = Conv.P2S<ThostFtdcInstrumentField>(e.Param);
+                        OnRspQryInstrument(fld, e.RspInfo, e.RequestID, e.IsLast);
+                    }
+                    else
+                    { HandleStatusInternal("参数ThostFtdcInstrumentField为空"); }
+                    break;
+
+                case EnumOnRspType.OnRspQryTradingAccount:
+                    if (e.Param != IntPtr.Zero)
+                    {
+                        var fld = Conv.P2S<ThostFtdcTradingAccountField>(e.Param);
+                        OnRspQryTradingAccount(fld, e.RspInfo, e.RequestID, e.IsLast);
+                    }
+                    else
+                    { HandleStatusInternal("参数ThostFtdcTradingAccountField为空"); }
+                    break;
+
+                case EnumOnRspType.OnRspQryInvestorPosition:
+                    if (e.Param != IntPtr.Zero)
+                    {
+                        var fld = Conv.P2S<ThostFtdcInvestorPositionField>(e.Param);
+                        OnRspQryInvestorPosition(fld, e.RspInfo, e.RequestID, e.IsLast);
+                    }
+                    else
+                    { HandleStatusInternal("参数ThostFtdcInvestorPositionField为空"); }
+                    break;
+
+                case EnumOnRspType.OnRspOrderAction:
+                    if (e.Param != IntPtr.Zero)
+                    {
+                        var fld = Conv.P2S<ThostFtdcInputOrderActionField>(e.Param);
+                        OnRspOrderAction(fld, e.RspInfo, e.RequestID, e.IsLast);
+                    }
+                    else
+                    { HandleStatusInternal("参数ThostFtdcInputOrderActionField为空"); }
+                    break;
+            }
+        }
+
+        private void TraderApi_OnErrRtnEvent(object sender, OnErrRtnEventArgs e)
+        {
+            IsError(e.RspInfo, e.EventType.ToString());
+        }
+
+        private void TraderApi_OnRtnEvent(object sender, OnRtnEventArgs e)
+        {
+            if (e.Param == IntPtr.Zero)
+            {
+                HandleStatusInternal("TraderApi_OnRtnEvent返回参数e.Param为空!");
+                return;
+            }
+
+            switch(e.EventType)
+            {
+                case EnumOnRtnType.OnRtnOrder:
+                    {
+                        var order = Conv.P2S<ThostFtdcOrderField>(e.Param);
+                        OnRtnOrder(order);
+                    }
+                    break;
+
+                case EnumOnRtnType.OnRtnTrade:
+                    {
+                        var trade = Conv.P2S<ThostFtdcTradeField>(e.Param);
+                        OnRtnTrade(trade);
+                    }
+                    break;
+
+                case EnumOnRtnType.OnRtnForQuoteRsp:
+                    break;
+
+                case EnumOnRtnType.OnRtnQuote:
+                    break;
+            }
+        }
+
+        /*
+         * --------------------------------------------------------------
          * 通用部分：连接/登录/结算确认/回调处理
          * --------------------------------------------------------------
          */
-        private void OnFrontConnected()
-        {
-            __DEBUGPF__();
-            ReqUserLogin();
-        }
-
         private void ReqUserLogin()
         {
             // 构造登录请求
@@ -124,9 +235,9 @@ namespace CTP_STrader.Biz
             // 发送登录请求
             int ret = trader.ReqUserLogin(login, iRequestID++);
             HandleStatusInternal("CTP发送用户登录请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
-            
+
             // 登录回调
-            if (HandleLoginDel !=null && ret != 0)
+            if (HandleLoginDel != null && ret != 0)
             {
                 HandleLoginDel(false);
             }
@@ -138,29 +249,25 @@ namespace CTP_STrader.Biz
 
             if (bIsLast)
             {
-                bool isLogin = !IsErrorRspInfo(pRspInfo);
-                if (isLogin)
-                {
-                    // 保存会话参数
-                    FRONT_ID = pRspUserLogin.FrontID;
-                    SESSION_ID = pRspUserLogin.SessionID;
-                    int iNextOrderRef = 0;
-                    if (!string.IsNullOrEmpty(pRspUserLogin.MaxOrderRef))
-                        iNextOrderRef = Convert.ToInt32(pRspUserLogin.MaxOrderRef);
-                    iNextOrderRef++;
-                    iOrderRef = iNextOrderRef;
+                // 保存会话参数
+                FRONT_ID = pRspUserLogin.FrontID;
+                SESSION_ID = pRspUserLogin.SessionID;
+                int iNextOrderRef = 0;
+                if (!string.IsNullOrEmpty(pRspUserLogin.MaxOrderRef))
+                    iNextOrderRef = Convert.ToInt32(pRspUserLogin.MaxOrderRef);
+                iNextOrderRef++;
+                iOrderRef = iNextOrderRef;
 
-                    ///获取当前交易日
-                    HandleStatusInternal("CTP获取当前交易日 = " + trader.GetTradingDay());
+                ///获取当前交易日
+                HandleStatusInternal("CTP获取当前交易日 = " + trader.GetTradingDay());
 
-                    ///投资者结算结果确认
-                    ReqSettlementInfoConfirm();
-                }
+                ///投资者结算结果确认
+                ReqSettlementInfoConfirm();
 
                 // 通知登录结果
                 if (HandleLoginDel != null)
                 {
-                    HandleLoginDel(isLogin);
+                    HandleLoginDel(true);
                 }
             }
         }
@@ -180,10 +287,10 @@ namespace CTP_STrader.Biz
         private void OnRspSettlementInfoConfirm(ThostFtdcSettlementInfoConfirmField p, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
         {
             __DEBUGPF__();
-            if (bIsLast && !IsErrorRspInfo(pRspInfo))
+            if (bIsLast)
             {
                 HandleStatusInternal("CTP投资者结算结果已确认");
-                
+
                 // 获取合约信息
                 ReqQryInstrument();
             }
@@ -203,15 +310,11 @@ namespace CTP_STrader.Biz
         private void OnRspQryInstrument(ThostFtdcInstrumentField pInstrument, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
         {
             __DEBUGPF__();
-            var isError = IsErrorRspInfo(pRspInfo);
 
             // 保存返回的合约代码
-            if (!isError)
-            {
-                instruments.Add(pInstrument.InstrumentID);
-            }
+            instruments.Add(pInstrument.InstrumentID);
 
-            if (bIsLast && !isError)
+            if (bIsLast)
             {
                 HandleStatusInternal("CTP合约代码已获取");
 
@@ -234,9 +337,9 @@ namespace CTP_STrader.Biz
         private void OnRspOrderAction(ThostFtdcInputOrderActionField pInputOrderAction, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
         {
             __DEBUGPF__();
-            IsErrorRspInfo(pRspInfo);
+            //IsErrorRspInfo(pRspInfo);
 
-            if(HandleErrRtnOrderCancelDel != null)
+            if (HandleErrRtnOrderCancelDel != null)
             {
                 var customOrder = new CustomOrder();
                 // 原始报单信息
@@ -248,36 +351,6 @@ namespace CTP_STrader.Biz
 
                 HandleErrRtnOrderCancelDel(customOrder, pRspInfo.ErrorMsg);
             }
-        }
-
-        private void OnErrRtnOrderInsert(ThostFtdcInputOrderField pInputOrder,ThostFtdcRspInfoField pRspInfo)
-        {
-            __DEBUGPF__();
-            IsErrorRspInfo(pRspInfo);
-        }
-
-        private void OnErrRtnOrderAction(ThostFtdcOrderActionField pOrderAction, ThostFtdcRspInfoField pRspInfo)
-        {
-            __DEBUGPF__();
-            IsErrorRspInfo(pRspInfo);
-        }
-
-        private void OnFrontDisconnected(int nReason)
-        {
-            __DEBUGPF__();
-            HandleStatusInternal("CTP前置机断开连接：nReason = " + nReason);
-        }
-
-        private void OnHeartBeatWarning(int nTimeLapse)
-        {
-            __DEBUGPF__();
-            //UpdateLogInfo("TimeLapse = " + nTimeLapse);
-        }
-
-        private void OnRspError(ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
-        {
-            __DEBUGPF__();
-            IsErrorRspInfo(pRspInfo);
         }
 
         /*
@@ -301,11 +374,8 @@ namespace CTP_STrader.Biz
         {
             __DEBUGPF__();
 
-            if (!IsErrorRspInfo(pRspInfo))
-            {
-                //pTradingAccount.Available;
-                HandleStatusInternal("当前账户可用资金："+pTradingAccount.Available);
-            }
+            //pTradingAccount.Available;
+            HandleStatusInternal("当前账户可用资金：" + pTradingAccount.Available);
         }
 
         public void ReqQryInvestorPosition()
@@ -324,11 +394,7 @@ namespace CTP_STrader.Biz
         void OnRspQryInvestorPosition(ThostFtdcInvestorPositionField pInvestorPosition, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
         {
             __DEBUGPF__();
-            if (!IsErrorRspInfo(pRspInfo))
-            {
-                //pInvestorPosition.Position;
-                HandleStatusInternal("当前账户持仓：" + pInvestorPosition.InstrumentID + " - " + pInvestorPosition.Position);
-            }
+            //pInvestorPosition.Position;
         }
 
         /*
@@ -395,7 +461,7 @@ namespace CTP_STrader.Biz
 
             // 撤单
             var ret = trader.ReqOrderAction(inAction, iRequestID++);
-            errMsg = (ret == 0) ? "-" : "CTP撤单失败,返回值:"+ret;
+            errMsg = (ret == 0) ? "-" : "CTP撤单失败,返回值:" + ret;
 
             return (ret == 0);
         }
@@ -456,6 +522,14 @@ namespace CTP_STrader.Biz
 
         /*
          * --------------------------------------------------------------
+         * 询价/询价回应
+         * --------------------------------------------------------------
+         */
+
+        private void OnRtnForQuoteRsp(CThostFtdcQuo)
+
+        /*
+         * --------------------------------------------------------------
          * 帮助函数
          * --------------------------------------------------------------
          */
@@ -505,15 +579,15 @@ namespace CTP_STrader.Biz
             }
         }
 
-        private bool IsErrorRspInfo(ThostFtdcRspInfoField pRspInfo)
+        private bool IsError(ThostFtdcRspInfoField rspinfo, string source)
         {
-            var flag = (pRspInfo != null && pRspInfo.ErrorID != 0);
-            if (flag)
+            if (rspinfo != null && rspinfo.ErrorID != 0)
             {
-                HandleErrorInternal("CPT返回错误:ErrorID=" + pRspInfo.ErrorID + ",ErrorMsg=" + pRspInfo.ErrorMsg);
-                //HandleErrorInternal(pRspInfo.ErrorMsg, pRspInfo.ErrorID);
+                HandleStatusInternal("CTP返回错误:ErrorID=" + rspinfo.ErrorID + ",ErrorMsg=" + rspinfo.ErrorMsg + ", 来源 " + source);
+                return true;
             }
-            return flag;
+
+            return false;
         }
 
         private void __DEBUGPF__()
