@@ -52,6 +52,7 @@
     <Compile Include="Base\Broker.cs" />
     <Compile Include="Base\CustomMarketData.cs" />
     <Compile Include="Base\CustomOrder.cs" />
+    <Compile Include="Base\CustomQuote.cs" />
     <Compile Include="Base\CustomTrade.cs" />
     <Compile Include="Base\IOrderMgr.cs" />
     <Compile Include="Base\PublicDefine.cs" />

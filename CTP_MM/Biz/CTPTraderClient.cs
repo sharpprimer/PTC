@@ -1,4 +1,5 @@
 ﻿using CTP;
+using CTP_MM.Base;
 using CTP_STrader.Base;
 using System;
 using System.Collections.Generic;
@@ -15,6 +16,7 @@ namespace CTP_STrader.Biz
         // 内部变量
         FtdcTdAdapter trader;
         int FRONT_ID, SESSION_ID;
+        string QUOTE_REF;
         int iRequestID = 0;
         int iOrderRef;
 
@@ -195,7 +197,7 @@ namespace CTP_STrader.Biz
                 return;
             }
 
-            switch(e.EventType)
+            switch (e.EventType)
             {
                 case EnumOnRtnType.OnRtnOrder:
                     {
@@ -212,9 +214,17 @@ namespace CTP_STrader.Biz
                     break;
 
                 case EnumOnRtnType.OnRtnForQuoteRsp:
+                    {
+                        var forQuote = Conv.P2S<ThostFtdcForQuoteRspField>(e.Param);
+                        OnRtnForQuoteRsp(forQuote);
+                    }
                     break;
 
                 case EnumOnRtnType.OnRtnQuote:
+                    {
+                        var quote = Conv.P2S<ThostFtdcQuoteField>(e.Param);
+                        OnRtnQuote(quote);
+                    }
                     break;
             }
         }
@@ -252,6 +262,7 @@ namespace CTP_STrader.Biz
                 // 保存会话参数
                 FRONT_ID = pRspUserLogin.FrontID;
                 SESSION_ID = pRspUserLogin.SessionID;
+                QUOTE_REF = pRspUserLogin.
                 int iNextOrderRef = 0;
                 if (!string.IsNullOrEmpty(pRspUserLogin.MaxOrderRef))
                     iNextOrderRef = Convert.ToInt32(pRspUserLogin.MaxOrderRef);
@@ -326,12 +337,6 @@ namespace CTP_STrader.Biz
                 //请求查询资金账户
                 ReqQryTradingAccount();
             }
-        }
-
-        private void OnRspOrderInsert(ThostFtdcInputOrderField pInputOrder, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
-        {
-            __DEBUGPF__();
-            IsErrorRspInfo(pRspInfo);
         }
 
         private void OnRspOrderAction(ThostFtdcInputOrderActionField pInputOrderAction, ThostFtdcRspInfoField pRspInfo, int nRequestID, bool bIsLast)
@@ -526,7 +531,76 @@ namespace CTP_STrader.Biz
          * --------------------------------------------------------------
          */
 
-        private void OnRtnForQuoteRsp(CThostFtdcQuo)
+        private void OnRtnForQuoteRsp(ThostFtdcForQuoteRspField pForQuoteRsp)
+        {
+
+        }
+
+        public bool ReqQuoteInsert(CustomQuote quote, out string errMsg)
+        {
+            ThostFtdcInputQuoteField req = new ThostFtdcInputQuoteField();
+            req.BrokerID = BROKER_ID;
+            req.InvestorID = INVESTOR_ID;
+            req.QuoteRef = QUOTE_REF;
+            req.InstrumentID = quote.InstrumentID;
+
+            req.AskPrice = quote.AskPrice;
+            req.BidPrice = quote.BidPrice;
+            req.AskVolume = quote.AskVolume;
+            req.BidVolume = quote.BidVolume;
+
+            req.AskOffsetFlag = quote.AskOffsetFlag;
+            req.BidOffsetFlag = quote.BidOffsetFlag;
+            req.AskHedgeFlag = quote.AskHedgeFlag;
+            req.BidHedgeFlag = quote.BidHedgeFlag;
+
+            int ret = trader.ReqQuoteInsert(req, iRequestID++);
+            errMsg = (ret == 0) ? "-" : "CTP询价回应录入失败,返回值:" + ret;
+
+            return (ret == 0);
+        }
+
+        public bool ReqQuoteAction(ThostFtdcQuoteField quoteField, out string errMsg)
+        {
+            static bool QUOTE_ACTION_SENT = false;      //是否发送了报单
+            if (QUOTE_ACTION_SENT)
+            {
+                errMsg = "";
+                return true;
+            }
+
+            ThostFtdcInputQuoteActionField req = new ThostFtdcInputQuoteActionField();
+            req.FrontID = FRONT_ID;
+            req.SessionID = SESSION_ID;
+
+            req.BrokerID = quoteField.BrokerID;
+            req.InvestorID = quoteField.InvestorID;
+            req.QuoteRef = quoteField.QuoteRef;
+            req.InstrumentID = quoteField.InstrumentID;
+
+            req.ActionFlag = EnumActionFlagType.Delete;
+
+            int ret = trader.ReqQuoteAction(req, iRequestID++);
+            errMsg = (ret == 0) ? "-" : "CTP询价回应撤单失败,返回值:" + ret;
+
+            QUOTE_ACTION_SENT = true;
+            return (ret == 0);
+        }
+
+        public void OnRtnQuote(ThostFtdcQuoteField quote)
+        {
+            if (IsMyQuote(quote))
+            {
+                if (IsTradingQuote(quote))
+                {
+
+                }
+                else if (quote.QuoteStatus == EnumOrderStatusType.Canceled)
+                {
+
+                }
+            }
+        }
 
         /*
          * --------------------------------------------------------------
@@ -554,6 +628,18 @@ namespace CTP_STrader.Biz
         {
             return (pOrder.FrontID == FRONT_ID &&
                 pOrder.SessionID == SESSION_ID);
+        }
+
+        private bool IsMyQuote(ThostFtdcQuoteField pQuote)
+        {
+            return (pQuote.FrontID == FRONT_ID &&
+                pQuote.SessionID == SESSION_ID &&
+                pQuote.QuoteRef == QUOTE_REF);
+        }
+
+        private bool IsTradingQuote(ThostFtdcQuoteField pQuote)
+        {
+            return (pQuote.QuoteStatus != EnumOrderStatusType.Canceled);
         }
 
         private ORDER_STATUS_CODE ConvertStatus(EnumOrderStatusType status)
