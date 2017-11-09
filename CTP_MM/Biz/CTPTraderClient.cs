@@ -1,17 +1,16 @@
 ﻿using CTP;
 using CTP_MM.Base;
-using CTP_STrader.Base;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 using System.Threading;
 
-namespace CTP_STrader.Biz
+namespace CTP_MM.Biz
 {
     public class CTPTraderClient : IOrderMgr
     {
-        static readonly string INSTRUMENT_ID = "IF";
+        static readonly string INSTRUMENT_ID = "IF;IO";
 
         // 内部变量
         FtdcTdAdapter trader;
@@ -262,7 +261,7 @@ namespace CTP_STrader.Biz
                 // 保存会话参数
                 FRONT_ID = pRspUserLogin.FrontID;
                 SESSION_ID = pRspUserLogin.SessionID;
-                QUOTE_REF = pRspUserLogin.
+                QUOTE_REF = "1";
                 int iNextOrderRef = 0;
                 if (!string.IsNullOrEmpty(pRspUserLogin.MaxOrderRef))
                     iNextOrderRef = Convert.ToInt32(pRspUserLogin.MaxOrderRef);
@@ -511,8 +510,8 @@ namespace CTP_STrader.Biz
             CustomTrade customTrade = new CustomTrade();
             customTrade.tradeRef = pTrade.ExchangeID + "_" + pTrade.OrderSysID;             // 成交回报的唯一编号
             customTrade.InstrumentID = pTrade.InstrumentID;
-            customTrade.Direction = (pTrade.Direction == EnumDirectionType.Buy) ? BS_CODE.Buy : BS_CODE.Sell;
-            customTrade.OffsetFlag = (pTrade.OffsetFlag == EnumOffsetFlagType.Open) ? OC_CODE.Open : OC_CODE.Close;
+            customTrade.Direction = pTrade.Direction;
+            customTrade.OffsetFlag = pTrade.OffsetFlag;
             customTrade.TradePrice = pTrade.Price;
             customTrade.TradeVol = pTrade.Volume;
             customTrade.TradeTime = pTrade.TradeTime;
@@ -527,7 +526,7 @@ namespace CTP_STrader.Biz
 
         /*
          * --------------------------------------------------------------
-         * 询价/询价回应
+         * 询价接收/询价回应
          * --------------------------------------------------------------
          */
 

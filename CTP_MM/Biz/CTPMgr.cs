@@ -1,5 +1,5 @@
 ﻿
-namespace CTP_STrader.Biz
+namespace CTP_MM.Biz
 {
     public static class CTPMgr
     {

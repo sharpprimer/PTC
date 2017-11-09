@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace CTP_STrader.Base
+namespace CTP_MM.Base
 {
     public class TradeDetail : INotifyPropertyChanged
     {

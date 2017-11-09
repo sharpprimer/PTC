@@ -1,5 +1,5 @@
 ﻿
-namespace CTP_STrader.Base
+namespace CTP_MM.Base
 {
     public delegate void UpdateLogInfoDelegate(string text);
 
@@ -25,6 +25,7 @@ namespace CTP_STrader.Base
         public static readonly string STOCK_NA = "N/A";
 
     }
+
     public enum BS_CODE { Buy = 0, Sell = 1, }
 
     public enum OC_CODE { Open = 0, Close = 1, }
@@ -33,6 +34,8 @@ namespace CTP_STrader.Base
 
     public enum EXCHANGE_CODE_ZH { 上交所 = 1, 深交所 = 2, 中金所 = 6, }
 
-    public enum PRICE_LEVEL { 加1档=0, 最新价=1, 减一档=2 }
+    public enum PRICE_LEVEL { 加1档 = 0, 最新价 = 1, 减一档 = 2, }
 
+    public enum EnumOptionType { Call = 0, Put = 1 }
 }
+

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace CTP_STrader.Base
+namespace CTP_MM.Base
 {
     public class StInputParam
     {

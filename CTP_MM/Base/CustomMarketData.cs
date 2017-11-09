@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace CTP_STrader.Base
+namespace CTP_MM.Base
 {
     public class CustomMarketData
     {

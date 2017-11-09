@@ -1,5 +1,5 @@
 ﻿
-namespace CTP_STrader.Base
+namespace CTP_MM.Base
 {
     public interface IOrderMgr
     {

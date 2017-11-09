@@ -1,10 +1,10 @@
 ﻿using CTP;
-using CTP_STrader.Base;
+using CTP_MM.Base;
 using System;
 using System.Diagnostics;
 using System.Reflection;
 
-namespace CTP_STrader.Biz
+namespace CTP_MM.Biz
 {
     public delegate void HandleCTPRawMarketData(ThostFtdcDepthMarketDataField pDepthMarketData);
 
@@ -93,57 +93,10 @@ namespace CTP_STrader.Biz
             }
         }
 
-        private void ReqUserLogin()
-        {
-            ThostFtdcReqUserLoginField reqUserLogin = new ThostFtdcReqUserLoginField();
-            reqUserLogin.BrokerID = BROKER_ID;
-
-            var ret = mdApi.ReqUserLogin(reqUserLogin, iRequestID++);
-            HandleStatusInternal("CTP发送用户登录请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
-
-            // 通知登录结果
-            if (HandleLoginDel != null && ret != 0)
-            {
-                HandleLoginDel(false);
-            }
-        }
-
-        public void ReqUserLogout()
-        {
-            ThostFtdcUserLogoutField logoutField = new ThostFtdcUserLogoutField();
-            logoutField.BrokerID = BROKER_ID;
-
-            var ret = mdApi.ReqUserLogout(logoutField, iRequestID++);
-            HandleStatusInternal("CTP发送用户登出请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
-        }
-
-        public void Subscribe(string[] instruments)
-        {
-            var ret = mdApi.SubscribeMarketData(instruments);
-            HandleStatusInternal("CTP发送订阅请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
-        }
-
-        public void Subscribe()
-        {
-            var ret = mdApi.SubscribeMarketData(Instruments);
-            HandleStatusInternal("CTP发送订阅请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
-        }
-
-        public void Unsubscribe(string[] instruments)
-        {
-            // 退订所需的行情
-            var ret = mdApi.UnSubscribeMarketData(instruments);
-            HandleStatusInternal("CTP发送取消订阅请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
-        }
-
         private void MdApi_OnRspEvent(object sender, OnRspEventArgs e)
         {
-            Console.WriteLine("MdApi_OnRspEvent " + e.EventType.ToString());
-            if (!IsError(e.RspInfo))
-            {
-                HandleStatusInternal("CPT返回错误:ErrorID=" + e.RspInfo.ErrorID + ",ErrorMsg=" + e.RspInfo.ErrorMsg + ", 来源 " + e.EventType.ToString());
-                return;
-            }
+            if (!IsError(e.RspInfo, e.EventType.ToString()))
+            { return; }
 
             switch (e.EventType)
             {
@@ -193,26 +146,75 @@ namespace CTP_STrader.Biz
 
         private void MdApi_OnRtnEvent(object sender, OnRtnEventArgs e)
         {
-            //Console.WriteLine("DataApi_OnRtnEvent " + e.EventType.ToString());
-
-            var fld = Conv.P2S<ThostFtdcDepthMarketDataField>(e.Param);
-
-            Console.WriteLine("{0}.{1:D3} {2} {3}", fld.UpdateTime, fld.UpdateMillisec, fld.InstrumentID, fld.LastPrice);
-
-            switch(e.EventType)
+            switch (e.EventType)
             {
                 case EnumOnRtnType.OnRtnDepthMarketData:
+                    {
+                        var fld = Conv.P2S<ThostFtdcDepthMarketDataField>(e.Param);
+                        OnRtnDepthMarketData(fld);
+                    }
                     break;
 
                 default:
-                    HandleStatusInternal("CPT行情Md未知事件返回MdApi_OnRtnEvent:"  + e.EventType.ToString());
+                    HandleStatusInternal("CPT行情Md未知事件返回MdApi_OnRtnEvent:" + e.EventType.ToString());
                     break;
             }
         }
 
-        private bool IsError(ThostFtdcRspInfoField rspinfo)
+
+        private void ReqUserLogin()
         {
-            return (rspinfo != null && rspinfo.ErrorID != 0);
+            ThostFtdcReqUserLoginField reqUserLogin = new ThostFtdcReqUserLoginField();
+            reqUserLogin.BrokerID = BROKER_ID;
+
+            var ret = mdApi.ReqUserLogin(reqUserLogin, iRequestID++);
+            HandleStatusInternal("CTP发送用户登录请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
+
+            // 通知登录结果
+            if (HandleLoginDel != null && ret != 0)
+            {
+                HandleLoginDel(false);
+            }
+        }
+
+        public void ReqUserLogout()
+        {
+            ThostFtdcUserLogoutField logoutField = new ThostFtdcUserLogoutField();
+            logoutField.BrokerID = BROKER_ID;
+
+            var ret = mdApi.ReqUserLogout(logoutField, iRequestID++);
+            HandleStatusInternal("CTP发送用户登出请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
+        }
+
+        public void Subscribe(string[] instruments)
+        {
+            var ret = mdApi.SubscribeMarketData(instruments);
+            HandleStatusInternal("CTP发送订阅请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
+        }
+
+        public void Subscribe()
+        {
+            var ret = mdApi.SubscribeMarketData(Instruments);
+            HandleStatusInternal("CTP发送订阅请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
+        }
+
+        public void Unsubscribe(string[] instruments)
+        {
+            // 退订所需的行情
+            var ret = mdApi.UnSubscribeMarketData(instruments);
+            HandleStatusInternal("CTP发送取消订阅请求：" + (ret == 0 ? "成功" : "失败,返回代码" + ret));
+        }
+
+       
+        private bool IsError(ThostFtdcRspInfoField rspinfo, string source)
+        {
+            if (rspinfo != null && rspinfo.ErrorID != 0)
+            {
+                HandleStatusInternal("CTP返回错误:ErrorID=" + rspinfo.ErrorID + ",ErrorMsg=" + rspinfo.ErrorMsg + ", 来源 " + source);
+                return true;
+            }
+
+            return false;
         }
 
         private void __DEBUGPF__()
